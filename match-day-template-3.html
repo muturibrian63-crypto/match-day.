@@ -1,0 +1,373 @@
+<title>Match Day</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: odds board. League header bars carry the column labels (1 X 2, then O/U 2.5 and GG/NG on wider screens); each match is one row; tapping a row opens its analysis and extra markets. */
+:root {
+  --bg: #eef2ef; --surface: #ffffff; --fg: #101d17; --muted: #5a6d64; --line: #d9e2dc;
+  --accent: #117a4d; --accent-fg: #ffffff; --draw: #8a9a92; --away: #3b5f9e;
+  --head: #e1ebe5; --cell: #eef3ef;
+  --font-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1511; --surface: #131f19; --fg: #e3efe8; --muted: #8ea599; --line: #22332a;
+    --accent: #3fcf8e; --accent-fg: #06210f; --draw: #6d7f76; --away: #7da2e6;
+    --head: #1a2d22; --cell: #1b2b22; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1511; --surface: #131f19; --fg: #e3efe8; --muted: #8ea599; --line: #22332a;
+  --accent: #3fcf8e; --accent-fg: #06210f; --draw: #6d7f76; --away: #7da2e6;
+  --head: #1a2d22; --cell: #1b2b22; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font-body);
+  padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+h1 { font: 800 clamp(26px, 7vw, 34px)/1 var(--font-display); letter-spacing: -0.02em; margin: 0; }
+.date { font: 500 12px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.note { font-size: 12px; color: var(--muted); }
+.banner { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); font-size: 12px; color: var(--muted); }
+.banner b { color: var(--fg); }
+.filter { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.filter label { font-size: 13px; color: var(--muted); }
+.filter select { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-width: 0; max-width: 100%; }
+.filter span { font-size: 13px; color: var(--muted); }
+select:focus-visible, input:focus-visible, .rowbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* picks */
+.pk-h { font: 800 17px var(--font-display); margin: 0; cursor: pointer; }
+.pk-h span { font: 500 13px var(--font-mono); color: var(--muted); }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.pk { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 9px 0; border-top: 1px solid var(--line); align-items: center; }
+.pk-m { min-width: 0; overflow-wrap: anywhere; }
+.pk-m span { display: block; font: 400 12px var(--font-mono); color: var(--muted); }
+.pk-s { grid-column: 1; color: var(--accent); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.pk-p { grid-column: 2; grid-row: 1 / span 2; text-align: right; font: 800 20px var(--font-display); font-variant-numeric: tabular-nums; }
+.pk-p small { display: block; font: 400 11px var(--font-mono); color: var(--muted); }
+
+/* odds board */
+#list { display: flex; flex-direction: column; gap: 12px; }
+.grp { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.g { display: grid; grid-template-columns: 44px minmax(0, 1fr) repeat(3, 50px); column-gap: 6px; align-items: center; }
+.x { display: none; }
+@media (min-width: 640px) {
+  .g { grid-template-columns: 44px minmax(0, 1fr) repeat(3, 52px) repeat(4, 52px); }
+  .x { display: grid; }
+}
+.lg-h { background: var(--head); padding: 8px 12px; font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.lg-h .ln { grid-column: 1 / 3; color: var(--fg); font-weight: 500; overflow-wrap: anywhere; letter-spacing: 0.03em; }
+.lg-h .ln i { font-style: normal; color: var(--muted); margin-left: 6px; }
+.lg-h .hl { text-align: center; }
+.mrow { border-top: 1px solid var(--line); }
+.rowbtn { width: 100%; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 9px 12px; min-height: 56px; cursor: pointer; }
+.rowbtn.np { cursor: default; opacity: 0.8; }
+.mrow.open { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.tm { font: 500 12px var(--font-mono); color: var(--muted); }
+.tn { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tn b { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.o { height: 36px; place-items: center; display: grid; background: var(--cell); border-radius: 6px; font: 500 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+.o.x { display: none; }
+@media (min-width: 640px) { .o.x { display: grid; } }
+.o.hi { box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); font-weight: 600; }
+.o.dim { color: var(--muted); }
+.cap { font-size: 12px; color: var(--muted); margin: 0; }
+
+/* opened row */
+.more { padding: 4px 12px 14px; border-top: 1px dashed var(--line); }
+.bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; margin-top: 10px; }
+.bar i { display: block; height: 100%; }
+.bar .h { background: var(--accent); } .bar .d { background: var(--draw); } .bar .a { background: var(--away); }
+.legend { display: flex; justify-content: space-between; gap: 8px; font: 500 12px var(--font-mono); margin-top: 6px; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.legend .h { color: var(--accent); } .legend .d { color: var(--muted); } .legend .a { color: var(--away); }
+.analysis { font-size: 14px; margin: 12px 0 0; max-width: 62ch; }
+h3 { font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 14px 0 6px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 500 11px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+.mono { font-family: var(--font-mono); }
+.scores { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc { border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; font: 500 13px var(--font-mono); background: var(--bg); }
+.sc b { color: var(--accent); }
+.corn { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.corn input { width: 80px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+@media (prefers-reduced-motion: no-preference) { .mrow { transition: background 0.15s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="date" id="metaDate"></div>
+    <h1>Match Day</h1>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <details class="card" id="picksCard" hidden>
+    <summary class="pk-h">Highest-probability picks <span id="pkCount"></span></summary>
+    <p class="note" style="margin:8px 0 6px">The most likely outcomes the model finds today, one per match, from games with current stats. Outcomes above 90% are left out because bookmakers pay almost nothing on them. No bet is safe: a 75% pick still loses one time in four.</p>
+    <div id="picks"></div>
+    <p class="note" id="accNote" style="margin:10px 0 0"></p>
+  </details>
+
+  <div class="filter"><label for="lgFilter">League</label><select id="lgFilter"><option value="">All leagues</option></select><span id="shown"></span></div>
+  <p class="cap">These are the model's fair odds (1 divided by the probability), not bookmaker prices. Outlined odds are the most likely outcome. GG and NG are both teams to score, yes and no. A dash means no prediction. Tap a match for the analysis and more markets.</p>
+
+  <div id="list"></div>
+
+  <p class="note">Estimates come from a Poisson model with independent goals for each team. Corners use the same model, which tends to understate how much they vary. These are statistical estimates, not guarantees.</p>
+</div>
+
+<script>
+(function () {
+  var META = /*META_START*/{"date": "Friday 23 October 2026 · Times in EAT", "banner": "<b>Sample data.</b> These fixtures are a snapshot. Run the update script to load a new day."}/*META_END*/;
+  var M = /*MATCHES_START*/[
+    { lg: "Bundesliga · Germany", ko: "21:30", h: "VfB Stuttgart", a: "Borussia Monchengladbach", p: [72.0, 15.1, 12.9] },
+    { lg: "Serie A · Italy", ko: "21:45", h: "Torino", a: "AC Monza", p: [45.6, 27.6, 26.8] },
+    { lg: "Ligue 1 · France", ko: "21:45", h: "Stade Brest", a: "OGC Nice", p: [43.3, 26.9, 29.8] },
+    { lg: "Premier League · England", ko: "22:00", h: "Ipswich Town", a: "Nottingham Forest", p: [31.6, 27.4, 41.0] },
+    { lg: "La Liga · Spain", ko: "22:00", h: "Deportivo Alaves", a: "Malaga CF", p: [58.8, 24.7, 16.5] },
+    { lg: "Premier League · Kenya", ko: "15:00", h: "Sample FC", a: "Test United" }
+  ]/*MATCHES_END*/;
+  var N = 10;
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  $("metaDate").textContent = META.date;
+  $("banner").innerHTML = META.banner;
+  var pc = function (p) { return (p * 100).toFixed(0) + "%"; };
+  var pc1 = function (p) { return (p * 100).toFixed(1) + "%"; };
+  var odds = function (p) { return p > 0.0005 ? (1 / p).toFixed(2) : "n/a"; };
+  var oddsCell = function (p) { return p > 0.0005 ? (1 / p).toFixed(2) : "-"; };
+
+  function pois(l, n) {
+    var a = [], p = Math.exp(-l); a.push(p);
+    for (var i = 1; i <= n; i++) { p = p * l / i; a.push(p); }
+    return a;
+  }
+  function overOf(d, line) { var s = 0; for (var k = 0; k < d.length; k++) if (k > line) s += d[k]; return s; }
+
+  function model(lh, la) {
+    var ph = pois(lh, N), pa = pois(la, N), H = 0, D = 0, A = 0, B = 0, tot = [], sc = [], i, j;
+    for (i = 0; i <= 2 * N; i++) tot.push(0);
+    for (i = 0; i <= N; i++) for (j = 0; j <= N; j++) {
+      var p = ph[i] * pa[j]; tot[i + j] += p;
+      if (i > j) H += p; else if (i === j) D += p; else A += p;
+      if (i > 0 && j > 0) B += p;
+      sc.push({ i: i, j: j, p: p });
+    }
+    return { H: H, D: D, A: A, B: B, tot: tot, sc: sc };
+  }
+
+  function fit(t) {
+    var s = t[0] + t[1] + t[2], tg = [t[0] / s, t[1] / s, t[2] / s];
+    var best = { e: 9, lh: 1.4, la: 1.1 };
+    function tryIt(lh, la) {
+      if (lh < 0.1 || la < 0.1) return;
+      var r = model(lh, la);
+      var e = Math.pow(r.H - tg[0], 2) + Math.pow(r.D - tg[1], 2) + Math.pow(r.A - tg[2], 2);
+      if (e < best.e) best = { e: e, lh: lh, la: la };
+    }
+    var a, b;
+    for (a = 0.2; a <= 4.2; a += 0.08) for (b = 0.2; b <= 3.6; b += 0.08) tryIt(a, b);
+    var c = best.lh, d = best.la;
+    for (a = c - 0.1; a <= c + 0.1; a += 0.01) for (b = d - 0.1; b <= d + 0.1; b += 0.01) tryIt(a, b);
+    return best;
+  }
+
+  function ladder(dist, lines) {
+    var h = "<tr><th>Line</th><th>Over</th><th>Under</th><th>Fair odds O / U</th></tr>";
+    lines.forEach(function (l) {
+      var o = overOf(dist, l);
+      h += "<tr><td>" + l.toFixed(1) + "</td><td>" + pc1(o) + "</td><td>" + pc1(1 - o) + '</td><td class="mono">' + odds(o) + " / " + odds(1 - o) + "</td></tr>";
+    });
+    return h;
+  }
+
+  function mkTable(rows) {
+    var h = "<tr><th>Market</th><th>Chance</th><th>Fair odds</th></tr>";
+    rows.forEach(function (x) { h += "<tr><td>" + x[0] + "</td><td>" + pc1(x[1]) + '</td><td class="mono">' + odds(x[1]) + "</td></tr>"; });
+    return h;
+  }
+
+  var cands = [];
+  function markets(m, r) {
+    var o15 = overOf(r.tot, 1.5), o25 = overOf(r.tot, 2.5), o35 = overOf(r.tot, 3.5);
+    var list = [
+      { k: "Over 1.5 goals", p: o15 },
+      { k: "Under 3.5 goals", p: 1 - o35 },
+      { k: "Over 2.5 goals", p: o25 },
+      { k: "Under 2.5 goals", p: 1 - o25 },
+      { k: "Both teams to score", p: r.B },
+      { k: m.h + " to win", p: r.H },
+      { k: m.a + " to win", p: r.A },
+      { k: m.h + " or draw", p: r.H + r.D },
+      { k: m.a + " or draw", p: r.A + r.D }
+    ];
+    list.sort(function (x, y) { return y.p - x.p; });
+    return list;
+  }
+  function analysis(m, f, r, q, best, top) {
+    var out = [], tg = f.lh + f.la, o25 = overOf(r.tot, 2.5);
+    if (Math.abs(r.H - r.A) < 0.08) {
+      out.push("This looks evenly matched: " + esc(m.h) + " " + pc(r.H) + ", draw " + pc(r.D) + ", " + esc(m.a) + " " + pc(r.A) + ".");
+    } else {
+      var fav = r.H > r.A ? m.h : m.a, fp = Math.max(r.H, r.A);
+      out.push(esc(fav) + (fp >= 0.5 ? " are clear favourites" : " have the edge") + " at " + pc(fp) + " to win, with the draw at " + pc(r.D) + ".");
+    }
+    if (tg < 2.2) out.push("A low-scoring game is expected, about " + tg.toFixed(1) + " goals, and Under 2.5 is " + pc(1 - o25) + ".");
+    else if (tg > 2.9) out.push("An open game is expected, about " + tg.toFixed(1) + " goals, and Over 2.5 is " + pc(o25) + ".");
+    else out.push("The goal outlook is balanced at about " + tg.toFixed(1) + " goals, with Over 2.5 at " + pc(o25) + ".");
+    if (r.B >= 0.55) out.push("Both teams scoring is likely (" + pc(r.B) + ").");
+    else if (r.B <= 0.42) out.push("A clean sheet for at least one side is more likely than not, with both teams scoring at only " + pc(r.B) + ".");
+    else out.push("Both teams to score is close to a coin flip (" + pc(r.B) + ").");
+    out.push("Likeliest score " + top.i + "-" + top.j + " (" + pc1(top.p) + "). Strongest angle: " + esc(best.k) + " at " + pc(best.p) + ", fair odds " + odds(best.p) + ".");
+    if (m.adv) out.push("API-Football's own tip: " + esc(m.adv) + ".");
+    out.push(q === "o" ? "This uses older-season stats, so treat it with caution."
+      : q === "p" ? "Based on season averages from API-Football's prediction data."
+      : "Based on this season's home and away scoring averages.");
+    out.push("Injuries, line-ups, weather and motivation are not included.");
+    return out.join(" ");
+  }
+
+  function triple(ps, labels, extra) {
+    var mx = 0, i;
+    for (i = 1; i < ps.length; i++) if (ps[i] > ps[mx]) mx = i;
+    return ps.map(function (p, k) {
+      return '<span class="o' + (extra ? " x" : "") + (k === mx ? " hi" : "") + '" title="' + labels[k] + " " + pc(p) + '">' + oddsCell(p) + "</span>";
+    }).join("");
+  }
+
+  var groups = {}, order = [], counts = {};
+  M.forEach(function (m, idx) {
+    var key = m.lg;
+    if (!groups[key]) {
+      var g = document.createElement("section");
+      g.className = "grp";
+      g.setAttribute("data-lg", key);
+      var head = document.createElement("div");
+      head.className = "lg-h g";
+      head.innerHTML = '<span class="ln">' + esc(key) + "<i></i></span>" +
+        '<span class="hl">1</span><span class="hl">X</span><span class="hl">2</span>' +
+        '<span class="hl x">O2.5</span><span class="hl x">U2.5</span><span class="hl x">GG</span><span class="hl x">NG</span>';
+      g.appendChild(head);
+      $("list").appendChild(g);
+      groups[key] = { el: g, head: head };
+      order.push(key);
+      counts[key] = 0;
+    }
+    counts[key]++;
+    var row = document.createElement("div");
+    row.className = "mrow";
+    var teams = '<span class="tn"><b>' + esc(m.h) + "</b><b>" + esc(m.a) + "</b></span>";
+
+    if (!m.xg && !m.p) {
+      var np = document.createElement("div");
+      np.className = "rowbtn g np";
+      np.innerHTML = '<span class="tm">' + esc(m.ko) + "</span>" + teams +
+        '<span class="o dim">-</span><span class="o dim">-</span><span class="o dim">-</span>' +
+        '<span class="o x dim">-</span><span class="o x dim">-</span><span class="o x dim">-</span><span class="o x dim">-</span>';
+      row.appendChild(np);
+      groups[key].el.appendChild(row);
+      return;
+    }
+
+    var f = m.xg ? { lh: m.xg[0], la: m.xg[1] } : fit(m.p), r = model(f.lh, f.la);
+    r.sc.sort(function (x, y) { return y.p - x.p; });
+    var top = r.sc[0];
+    var o25 = overOf(r.tot, 2.5);
+    var best = markets(m, r), q = m.q || "s";
+    var pick = best.filter(function (x) { return x.p <= 0.9; })[0] || best[0];
+    if (q !== "o" && pick.p <= 0.9) cands.push({ m: m, k: pick.k, p: pick.p });
+    var note = analysis(m, f, r, q, pick, top);
+    var pp = [r.H, r.D, r.A], s = pp[0] + pp[1] + pp[2];
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "rowbtn g";
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-controls", "mp" + idx);
+    btn.innerHTML = '<span class="tm">' + esc(m.ko) + "</span>" + teams +
+      triple(pp, ["Home win", "Draw", "Away win"], false) +
+      triple([o25, 1 - o25], ["Over 2.5", "Under 2.5"], true) +
+      triple([r.B, 1 - r.B], ["Both score", "Not both"], true);
+
+    var more = document.createElement("div");
+    more.className = "more";
+    more.id = "mp" + idx;
+    more.hidden = true;
+    more.innerHTML =
+      '<div class="bar"><i class="h" style="width:' + (pp[0] / s * 100) + '%"></i><i class="d" style="width:' + (pp[1] / s * 100) + '%"></i><i class="a" style="width:' + (pp[2] / s * 100) + '%"></i></div>' +
+      '<div class="legend"><span class="h">Home ' + (pp[0] / s * 100).toFixed(0) + '%</span><span class="d">Draw ' + (pp[1] / s * 100).toFixed(0) + '%</span><span class="a">Away ' + (pp[2] / s * 100).toFixed(0) + "%</span></div>" +
+      '<p class="analysis">' + note + "</p>" +
+      '<h3>Result and both teams to score</h3><div class="scroll"><table>' + mkTable([
+        ["Home or draw (1X)", r.H + r.D], ["Home or away (12)", r.H + r.A], ["Away or draw (X2)", r.A + r.D],
+        ["Both teams to score", r.B], ["Not both teams to score", 1 - r.B]]) + "</table></div>" +
+      "<h3>Goals</h3><div class=\"scroll\"><table>" + ladder(r.tot, [0.5, 1.5, 2.5, 3.5, 4.5]) + "</table></div>" +
+      "<h3>Correct score</h3><div class=\"scores\">" + r.sc.slice(0, 8).map(function (x) { return '<span class="sc"><b>' + x.i + "-" + x.j + "</b> " + pc1(x.p) + "</span>"; }).join("") + "</div>" +
+      "<h3>Corners</h3><div class=\"corn\"><label for=\"c" + idx + "\">Assumed total corners</label><input id=\"c" + idx + "\" type=\"number\" step=\"0.5\" min=\"4\" max=\"18\" value=\"" + (m.c || 10).toFixed(1) + "\"><span>" + (m.cs ? "Estimated from each team's recent matches." : "Assumed. Adjust using each team's usual corner counts.") + "</span></div>" +
+      "<div class=\"scroll\" style=\"margin-top:8px\"><table id=\"ct" + idx + "\"></table></div>";
+
+    row.appendChild(btn);
+    row.appendChild(more);
+    groups[key].el.appendChild(row);
+
+    btn.addEventListener("click", function () {
+      var open = more.hidden;
+      more.hidden = !open;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      row.className = "mrow" + (open ? " open" : "");
+    });
+    function corners() {
+      var v = parseFloat($("c" + idx).value);
+      if (!isFinite(v) || v < 1) v = 10;
+      $("ct" + idx).innerHTML = ladder(pois(v, 40), [7.5, 8.5, 9.5, 10.5, 11.5, 12.5]);
+    }
+    $("c" + idx).addEventListener("input", corners);
+    corners();
+  });
+
+  order.forEach(function (key) {
+    groups[key].head.querySelector("i").textContent = " " + counts[key];
+  });
+
+  var pickList = cands.filter(function (c) { return c.p >= 0.7; })
+    .sort(function (x, y) { return y.p - x.p; }).slice(0, 10);
+  if (pickList.length) {
+    $("picksCard").hidden = false;
+    $("pkCount").textContent = "(" + pickList.length + ")";
+    $("picks").innerHTML = pickList.map(function (c) {
+      return '<div class="pk"><div class="pk-m"><b>' + esc(c.m.h) + " v " + esc(c.m.a) + "</b><span>" + esc(c.m.lg) + " · " + esc(c.m.ko) +
+        '</span></div><div class="pk-s">' + esc(c.k) + '</div><div class="pk-p">' + pc(c.p) + "<small>fair " + odds(c.p) + "</small></div></div>";
+    }).join("");
+    var top5 = pickList.slice(0, 5), acc = top5.reduce(function (a, c) { return a * c.p; }, 1);
+    $("accNote").textContent = "Combining the top " + top5.length + " picks in one accumulator would win only about " + pc(acc) +
+      " of the time, assuming the matches are independent. Likely outcomes pay short odds, so only back a pick if the bookmaker's odds are higher than the fair odds shown.";
+  }
+
+  order.forEach(function (key) {
+    var o = document.createElement("option");
+    o.value = key; o.textContent = key;
+    $("lgFilter").appendChild(o);
+  });
+  function applyFilter() {
+    var v = $("lgFilter").value, n = 0;
+    order.forEach(function (key) {
+      var show = !v || key === v;
+      groups[key].el.hidden = !show;
+      if (show) n += counts[key];
+    });
+    $("shown").textContent = n + " of " + M.length + " matches";
+  }
+  $("lgFilter").addEventListener("change", applyFilter);
+  applyFilter();
+})();
+</script>
